@@ -5,3 +5,6 @@
 
 .idea/
 .bsp/
+.bloop/
+.metals/
+project/project

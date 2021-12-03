@@ -37,7 +37,7 @@ object State:
   def empty: State =
     State(Array.empty)
 
-object Day03 extends IOApp.Simple:
+object Part1 extends IOApp.Simple:
   override def run: IO[Unit] =
     Input
       .lines("day03.txt")
@@ -52,7 +52,7 @@ object Day03 extends IOApp.Simple:
       .flatMap { state =>
         val gamma = Integer.parseInt(state.maxString, 2)
         val epsilon = Integer.parseInt(state.minString, 2)
-        for 
+        for
           _ <- IO.println(s"Gamma: ${state.maxString}=${gamma}")
           _ <- IO.println(s"Epsilon: ${state.minString}=${epsilon}")
           _ <- IO.println(s"Answer: ${gamma * epsilon}")
