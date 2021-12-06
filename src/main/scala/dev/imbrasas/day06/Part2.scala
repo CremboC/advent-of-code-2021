@@ -40,9 +40,7 @@ case class FishState(map: Map[Fish, Long]):
     FishState(state_)
 
   def getZeros: Long = map.get(Fish(0)).getOrElse(0L)
-  def countTotal: Long = map.foldLeft(0L) { case (x, (fish, count)) =>
-    x + count
-  }
+  def countTotal: Long = map.values.sum
 
 object FishState:
   def empty: FishState = FishState(Map.empty)
@@ -56,15 +54,13 @@ object Part2 extends IOApp.Simple:
         Stream.emits(line.split(',').flatMap(_.toIntOption).map(Fish(_)))
       )
       .through { fishes =>
-        def loop(day: Int, fishState: Stream[IO, FishState])
-            : Stream[IO, FishState] =
+        def loop(day: Int, fishState: FishState): FishState =
           if day == maxDay then fishState
-          else fishState.map(_.day).through(loop(day + 1, _))
+          else loop(day + 1, fishState.day)
 
-        loop(
-          0,
-          fishes.fold(FishState.empty)((state, fish) => state.add(fish))
-        )
+        fishes
+          .fold(FishState.empty)((state, fish) => state.add(fish))
+          .map(loop(0, _))
       }
       .map(_.countTotal)
       .printlns
