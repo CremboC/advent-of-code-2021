@@ -7,4 +7,5 @@ lazy val root = (project in file("."))
     name := "advent-of-code-2021",
     libraryDependencies += "co.fs2" %% "fs2-core" % "3.2.2",
     libraryDependencies += "co.fs2" %% "fs2-io" % "3.2.2",
+    libraryDependencies += "org.typelevel" %% "cats-effect-cps" % "0.3.0"
   )

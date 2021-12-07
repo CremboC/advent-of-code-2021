@@ -10,3 +10,11 @@ object Input:
       .readAll(Resources.fs2Path(file))
       .through(fs2.text.utf8.decode[IO])
       .through(fs2.text.lines[IO])
+
+  def line(file: String): IO[String] =
+    Files[IO]
+      .readAll(Resources.fs2Path(file))
+      .through(fs2.text.utf8.decode[IO])
+      .through(fs2.text.lines[IO])
+      .compile
+      .lastOrError
