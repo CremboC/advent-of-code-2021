@@ -30,17 +30,17 @@ case class Grid(
   def flashing: Queue[(Int, Int)] =
     g.mapWithIndex { (row, i) =>
       row.mapWithIndex { (el, j) =>
-        if el >= 9 then Some((i, j)) else None
+        if el > 9 then Some((i, j)) else None
       }.flatten
     }.flatten
       .to(Queue)
 
-  def flashReset: Grid =
+  def reset: Grid =
     var flashed_ = 0
     copy(
       g = g.mapWithIndex { (row, i) =>
         row.mapWithIndex { (el, j) =>
-          if el >= 9 then
+          if el > 9 then
             flashed_ += 1
             0
           else el
@@ -48,6 +48,8 @@ case class Grid(
       },
       flashes = flashes + flashed_
     )
+
+  def allZeroes: Boolean = g.flatMap(_.filter(_ == 0)).length === (maxI * maxJ)
 
   def incrementAdjacent(i: Int, j: Int): Grid =
     inline def around(i: Int, j: Int): List[(Int, Int)] =
@@ -69,7 +71,7 @@ object Day11 extends IOApp.Simple:
   override def run: IO[Unit] =
     async[IO] {
       val input = Input
-        .lines("day11_sample.txt")
+        .lines("day11.txt")
         .map(_.split("").map(_.toInt).toVector)
         .compile
         .toVector
@@ -78,7 +80,7 @@ object Day11 extends IOApp.Simple:
         }
         .await
 
-      val maxSteps = 1
+      val maxSteps = 200
 
       IO.println(input).await
 
@@ -87,24 +89,40 @@ object Day11 extends IOApp.Simple:
           inc: Queue[(Int, Int)] = Queue.empty,
           flashed: Set[(Int, Int)] = Set.empty
       ): Grid =
-        val grid_ = inc.foldLeft(grid) { case (acc, (i, j)) =>
-          acc.incrementAdjacent(i, j)
-        }
-        val flashed_ = flashed ++ inc.toSet
-        val flashing = grid_.flashing.filterNot(flashed_.contains(_))
+        if inc.isEmpty then grid
+        else
+          val grid_ = inc.foldLeft(grid) { case (acc, (i, j)) =>
+            acc.incrementAdjacent(i, j)
+          }
+          val flashed_ = flashed ++ inc.toSet
+          val flashing = grid_.flashing.filterNot(flashed_.contains(_))
 
-        if flashing.isEmpty then grid_
-        else microstep(grid_, flashing, flashed_)
+          microstep(grid_, flashing, flashed_)
 
-      def step(s: Int, grid: Grid): Grid =
+      def part1(s: Int, grid: Grid): Grid =
         if s == maxSteps then grid
         else
-          val grid_ =
-            microstep(grid.incrementOne).flashReset
+          val grid_ = grid.incrementOne
+          val flashing = grid_.flashing
 
-          step(s + 1, grid_)
+          val grid__ =
+            microstep(grid_, flashing, Set.empty).reset
 
-      val answer = step(0, input)
-      IO.println(answer).await
+          part1(s + 1, grid__)
+
+      val answer = part1(0, input)
       IO.println(answer.flashes).await
+
+      def part2(s: Int, grid: Grid): Int =
+        val grid_ = grid.incrementOne
+        val flashing = grid_.flashing
+
+        val grid__ =
+          microstep(grid_, flashing, Set.empty).reset
+
+        if grid__.allZeroes then s
+        else part2(s + 1, grid__)
+
+      val answer2 = part2(1, input)
+      IO.println(answer2).await
     }
