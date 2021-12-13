@@ -7,16 +7,65 @@ import fs2.Stream
 
 import dev.imbrasas.util.{Input, Resources}
 import scala.annotation.tailrec
+import scala.collection.immutable.Queue
 
-case class Grid(g: Vector[Vector[Int]]):
+case class Grid(
+    maxI: Int,
+    maxJ: Int,
+    g: Vector[Vector[Int]],
+    flashes: Int = 0
+):
   def at(i: Int, j: Int): Option[Int] =
     g.get(i).flatMap(_.get(j))
 
-  
+  def set(i: Int, j: Int, v: Int): Grid =
+    copy(g = g.updated(i, g(i).updated(j, v)))
 
-  
+  def incrementAt(i: Int, j: Int): Grid =
+    at(i, j).map(x => set(i, j, x + 1)).getOrElse(this)
+
+  def incrementOne: Grid =
+    copy(g = g.map(_.map(_ + 1)))
+
+  def flashing: Queue[(Int, Int)] =
+    g.mapWithIndex { (row, i) =>
+      row.mapWithIndex { (el, j) =>
+        if el >= 9 then Some((i, j)) else None
+      }.flatten
+    }.flatten
+      .to(Queue)
+
+  def flashReset: Grid =
+    var flashed_ = 0
+    copy(
+      g = g.mapWithIndex { (row, i) =>
+        row.mapWithIndex { (el, j) =>
+          if el >= 9 then
+            flashed_ += 1
+            0
+          else el
+        }
+      },
+      flashes = flashes + flashed_
+    )
+
+  def incrementAdjacent(i: Int, j: Int): Grid =
+    inline def around(i: Int, j: Int): List[(Int, Int)] =
+      (i - 1 to i + 1)
+        .flatMap(i => (j - 1 to j + 1).map(j => (i, j)))
+        .filter(_ != (i, j))
+        .toList
+
+    around(i, j).foldLeft(this) { case (acc, (i, j)) =>
+      acc.incrementAt(i, j)
+    }
+
+  override def toString: String =
+    g.map(_.mkString(".")).mkString("\n") + s"\n"
 
 object Day11 extends IOApp.Simple:
+  extension [A](set: Set[A]) def containsNot(a: A): Boolean = !set.contains(a)
+
   override def run: IO[Unit] =
     async[IO] {
       val input = Input
@@ -24,33 +73,38 @@ object Day11 extends IOApp.Simple:
         .map(_.split("").map(_.toInt).toVector)
         .compile
         .toVector
-        .map(Grid(_))
+        .map { vectors =>
+          Grid(vectors.length, vectors.head.length, vectors)
+        }
         .await
 
-      val maxSteps = 100
+      val maxSteps = 1
 
-      def microstep(grid: Grid, i: Int, j: Int): Grid =
+      IO.println(input).await
 
-        @tailrec
-        def loopRow(row: Vector[Int], i: Int, j: Int, acc: Grid): Grid =
-          row match
-            case head :+ rest =>
-              if head == 9 then 
+      def microstep(
+          grid: Grid,
+          inc: Queue[(Int, Int)] = Queue.empty,
+          flashed: Set[(Int, Int)] = Set.empty
+      ): Grid =
+        val grid_ = inc.foldLeft(grid) { case (acc, (i, j)) =>
+          acc.incrementAdjacent(i, j)
+        }
+        val flashed_ = flashed ++ inc.toSet
+        val flashing = grid_.flashing.filterNot(flashed_.contains(_))
 
-            case _ => acc
+        if flashing.isEmpty then grid_
+        else microstep(grid_, flashing, flashed_)
 
-
-        @tailrec          
-        def loopColumn()
-        ???
-
-      def step(s: Int, grid: Grid, flashes: Int): Int =
-        if s == maxSteps then flashes
+      def step(s: Int, grid: Grid): Grid =
+        if s == maxSteps then grid
         else
+          val grid_ =
+            microstep(grid.incrementOne).flashReset
 
-          1
-          ???
+          step(s + 1, grid_)
 
-      val answer = step(0, input, 0)
+      val answer = step(0, input)
       IO.println(answer).await
+      IO.println(answer.flashes).await
     }
