@@ -10,103 +10,103 @@ import dev.imbrasas.util.{Input, Resources}
 import scala.annotation.tailrec
 import scala.collection.immutable.Queue
 
-sealed trait Cave:
-  def connects(other: Cave): Boolean =
-    (this, other) match
-      case (Start(e), Mid(s, _)) => s == e
-      case (Mid(s, _), Start(e)) => s == e
-      case (Mid(_, e), End(s))   => e == s
-      case (End(s), Mid(_, e))   => e == s
-      case _                     => false
+case class Link(t: Node, f: Node)
 
-case class Start(e: String) extends Cave
+case class Node(name: String):
+  lazy val isSmall: Boolean = name.forall(_.isLower)
+  lazy val isStart: Boolean = name == "start"
+  lazy val isEnd: Boolean = name == "end"
 
-case class Mid(s: String, e: String) extends Cave:
-  def startsWith(start: String): Boolean = start == s
-
-case class End(s: String) extends Cave
+case class Cave(nodes: Queue[Node], links: Queue[Link]):
+  lazy val lookup: Map[Node, Queue[Node]] =
+    links
+      .flatMap { case Link(n1, n2) =>
+        Queue((n1 -> n2), (n2 -> n1))
+      }
+      .groupMap(_._1)(_._2)
+      .map((from, to) => (from, to.filterNot(x => x.isStart)))
 
 object Cave:
-  def parse(string: String): List[Cave] =
-    string.split("-") match
-      case Array("start", e) => List(Start(e))
-      case Array(e, "start") => List(Start(e))
-      case Array(s, "end")   => List(End(s))
-      case Array("end", s)   => List(End(s))
-      case Array(s, e)       => List(Mid(s, e), Mid(e, s))
-
-opaque type Path = Queue[Cave]
-object Path:
-  extension (p: Path)
-    def append(q: Cave): Path = p.appended(q)
-    def prepend(q: Cave): Path = p.prepended(q)
-    def last: Cave = p.last
-
-  def apply(q: Cave): Path = Queue(q)
-
-  implicit val show: Show[Path] =
-    Show.show { p =>
-      p.foldLeft("") {
-        case (acc, Start(e)) =>
-          s"start-$e"
-        case (acc, Mid(s, e)) =>
-          s"${acc}-${e}"
-        case (acc, End(s)) =>
-          s"$acc-end"
+  def parse(strings: List[String]): Cave =
+    val (nodes, links) =
+      strings.foldLeft((Set.empty[Node], Queue.empty[Link])) {
+        case ((nodes, links), string) =>
+          val Array(s, e) = string.split("-")
+          val start = Node(s)
+          val end = Node(e)
+          (nodes ++ Set(start, end), links.appended(Link(start, end)))
       }
-    }
+
+    Cave(nodes.to(Queue), links)
 
 object Day12 extends IOApp.Simple:
 
   override def run: IO[Unit] =
     async[IO] {
       val input =
-        Input
-          .lines("day12_sample.txt")
-          .map(Cave.parse(_))
-          .compile
-          .toList
-          .await
-          .flatten
+        Cave.parse(
+          Input
+            .lines("day12.txt")
+            .compile
+            .toList
+            .await
+        )
 
-      val starts = input.collect { case c @ Start(_) => c }
-      val mids = input.collect { case c @ Mid(_, _) => c }
-      val ends = input.collect { case c @ End(_) => c }
+      def paths(
+          cave: Cave,
+          path: Queue[Node]
+      ): Queue[Queue[Node]] =
+        path match
+          case _ :+ last =>
+            val links = cave.lookup(last)
+            val traversals =
+              links.flatMap { node =>
+                if node.isSmall && path.contains(node) then Queue.empty
+                else if node.isEnd then Queue(path.appended(node))
+                else paths(cave, path.appended(node))
+              }
 
-      def buildStart(s: Start, mids: List[Mid]): List[Path] =
-        mids
-          .filter(_.connects(s))
-          .map(Path(s).append(_))
+            traversals
+          case _ => Queue.empty
 
-      def buildEnd(p: Path, ends: List[End]): List[Path] =
-        ends
-          .filter(_.connects(p.last))
-          .map(p.append)
+      val part1 =
+        paths(input, Queue(Node("start")))
+          .filter(_.last == Node("end"))
+          .length
+      IO.println(part1).await
 
-      // def list(
-      //     starts: List[Start],
-      //     mids: List[Mid],
-      //     ends: List[End],
-      //     acc: List[Path]
-      // ): List[Path] =
-      //   starts match
-      //     case start :: starts_ =>
-      //       buildStart(start, mids).map { part => }
-      //       Nil
-      //     case Nil => Nil
+      def paths_ii(
+          cave: Cave,
+          double: Node,
+          path: Queue[Node]
+      ): Queue[Queue[Node]] =
+        path match
+          case _ :+ last =>
+            val links = cave.lookup(last)
+            val traversals =
+              links.flatMap { node =>
+                if node.isSmall && node != double && path.contains(node) then
+                  Queue.empty
+                else if node.isSmall && node == double && path
+                    .filter(_ == node)
+                    .length == 2
+                then Queue.empty
+                else if node.isEnd then Queue(path.appended(node))
+                else paths_ii(cave, double, path.appended(node))
+              }
 
-      IO.println(starts).await
-      IO.println(mids).await
-      IO.println(ends).await
-      IO.println(starts.head.connects(mids.head)).await
+            traversals
+          case _ => Queue.empty
 
-      val paths = starts.flatMap { s =>
-        buildStart(s, mids).flatMap { part =>
-          buildEnd(part, ends)
-        }
-      }
+      val smallCaves = input.nodes.filter(_.isSmall)
 
-      IO.println(paths.length).await
+      val part2 =
+        smallCaves
+          .flatMap(small =>
+            paths_ii(input, small, Queue(Node("start")))
+              .filter(_.last == Node("end"))
+          )
+          .toSet
 
-      IO.println(paths).await
+      IO.println(part2.size).await
     }
