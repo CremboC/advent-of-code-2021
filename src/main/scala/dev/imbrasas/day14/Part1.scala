@@ -12,7 +12,7 @@ import scala.collection.immutable.Queue
 
 case class Rule(pair: String, insert: Char)
 
-object Day14 extends IOApp.Simple:
+object Part1 extends IOApp.Simple:
 
   extension (s: String)
     def allIndexOff(str: String): Queue[Int] =
